@@ -28,27 +28,32 @@
  */
 
 #include <functional>
-#include <memory>
 #include <stdexcept>
-#include <string>
 
 #include <libphidget22/phidget22.h>
 
-#include "phidgets_api/analog_input.hpp"
-#include "phidgets_api/analog_inputs.hpp"
 #include "phidgets_api/phidget22.hpp"
+#include "phidgets_api/analog_inputs.hpp"
+
 
 namespace phidgets {
 
 AnalogInputs::AnalogInputs(int32_t serial_number, int hub_port,
                            bool is_hub_port_device,
-                           std::function<void(int, double)> input_handler)
+                           std::string address,
+                           int port,
+                           std::function<void(double)> input_handler)
+    : serial_number_(serial_number),
+    input_handler_(input_handler)
 {
+    if (is_hub_port_device){
+            std::string server = "server";
+            std::string password = "";
+            int flags = 0;
+            PhidgetNet_addServer(server.c_str(), address.c_str(), port, password.c_str(), flags);
+        }
     PhidgetReturnCode ret;
-
-    PhidgetVoltageInputHandle ai_handle;
-
-    ret = PhidgetVoltageInput_create(&ai_handle);
+    ret = PhidgetVoltageInput_create(&ai_handle_);
     if (ret != EPHIDGET_OK)
     {
         throw Phidget22Error(
@@ -56,49 +61,58 @@ AnalogInputs::AnalogInputs(int32_t serial_number, int hub_port,
             "count",
             ret);
     }
-
-    PhidgetHandle handle = reinterpret_cast<PhidgetHandle>(ai_handle);
-
-    helpers::openWaitForAttachment(handle, serial_number, hub_port,
-                                   is_hub_port_device, 0);
-
-    ret = Phidget_getDeviceChannelCount(handle, PHIDCHCLASS_VOLTAGEINPUT,
-                                        &input_count_);
-
-    helpers::closeAndDelete(&handle);
-
+    Phidget_setHubPort(reinterpret_cast<PhidgetHandle>(ai_handle_), hub_port);
+    Phidget_setIsRemote(reinterpret_cast<PhidgetHandle>(ai_handle_), 1);
+    Phidget_setDeviceSerialNumber(reinterpret_cast<PhidgetHandle>(ai_handle_), serial_number);
+    ret = PhidgetVoltageInput_setOnVoltageChangeHandler(
+        ai_handle_, VoltageChangeHandler, this);
     if (ret != EPHIDGET_OK)
     {
-        throw Phidget22Error("Failed to get AnalogInput device channel count",
-                             ret);
+        throw Phidget22Error(
+            "Failed to set change handler for AnalogInput channel ", ret);
     }
+    Phidget_openWaitForAttachment(reinterpret_cast<PhidgetHandle>(ai_handle_), 20000);
 
-    ais_.resize(input_count_);
-    for (uint32_t i = 0; i < input_count_; ++i)
+}
+
+AnalogInputs::~AnalogInputs()
+{
+    PhidgetHandle handle = reinterpret_cast<PhidgetHandle>(ai_handle_);
+    helpers::closeAndDelete(&handle);
+}
+
+double AnalogInputs::getSensorValue() const
+{
+    double sensor_value;
+    PhidgetReturnCode ret =
+        PhidgetVoltageInput_getSensorValue(ai_handle_, &sensor_value);
+    if (ret != EPHIDGET_OK)
     {
-        ais_[i] = std::make_unique<AnalogInput>(
-            serial_number, hub_port, is_hub_port_device, i, input_handler);
+        throw Phidget22Error("Failed to get analog sensor value", ret);
+    }
+
+    return sensor_value;
+}
+
+void AnalogInputs::setDataInterval(uint32_t data_interval_ms) const
+{
+    PhidgetReturnCode ret =
+        PhidgetVoltageInput_setDataInterval(ai_handle_, data_interval_ms);
+    if (ret != EPHIDGET_OK)
+    {
+        throw Phidget22Error("Failed to set analog data interval", ret);
     }
 }
 
-int32_t AnalogInputs::getSerialNumber() const noexcept
+void AnalogInputs::voltageChangeHandler(double sensorValue) const
 {
-    return ais_.at(0)->getSerialNumber();
+    input_handler_(sensorValue);
 }
 
-uint32_t AnalogInputs::getInputCount() const noexcept
+void AnalogInputs::VoltageChangeHandler(
+    PhidgetVoltageInputHandle /* input_handle */, void *ctx, double sensorValue)
 {
-    return input_count_;
-}
-
-double AnalogInputs::getSensorValue(int index) const
-{
-    return ais_.at(index)->getSensorValue();
-}
-
-void AnalogInputs::setDataInterval(int index, uint32_t data_interval_ms) const
-{
-    ais_.at(index)->setDataInterval(data_interval_ms);
+    (reinterpret_cast<AnalogInputs *>(ctx))->voltageChangeHandler(sensorValue);
 }
 
 }  // namespace phidgets

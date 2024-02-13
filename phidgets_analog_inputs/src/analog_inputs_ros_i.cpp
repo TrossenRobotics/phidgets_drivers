@@ -49,23 +49,35 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions& options)
 
     RCLCPP_INFO(get_logger(), "Starting Phidgets AnalogInputs");
 
-    int serial_num =
-        this->declare_parameter("serial", -1);  // default open any device
+    // int serial_num = 
+    //     this->declare_parameter("serial", 664919);  // default open any device
 
-    int hub_port = this->declare_parameter(
-        "hub_port", 0);  // only used if the device is on a VINT hub_port
+    // int hub_port = this->declare_parameter(
+    //     "hub_port", 0);  // only used if the device is on a VINT hub_port
 
-    // only used if the device is on a VINT hub_port
-    bool is_hub_port_device =
-        this->declare_parameter("is_hub_port_device", false);
+    // // only used if the device is on a VINT hub_port
+    // bool is_hub_port_device =
+    //     this->declare_parameter("is_hub_port_device", true);
 
-    int data_interval_ms = this->declare_parameter("data_interval_ms", 250);
+    // int data_interval_ms = this->declare_parameter("data_interval_ms", 250);
 
-    publish_rate_ = this->declare_parameter("publish_rate", 0.0);
-    if (publish_rate_ > 1000.0)
-    {
-        throw std::runtime_error("Publish rate must be <= 1000");
-    }
+    // publish_rate_ = this->declare_parameter("publish_rate", 0.0);
+    // if (publish_rate_ > 1000.0)
+    // {
+    //     throw std::runtime_error("Publish rate must be <= 1000");
+    // }
+    // std::string ip_ = this->declare_parameter("ip_address", "192.168.1.1");
+    // int port = this->declare_parameter("port", 5661);
+    int serial_num = 664919;
+
+    int hub_port = 0;
+
+    int data_interval_ms = 500;
+
+    publish_rate_ = 1.0;
+
+    std::string ip_ = "192.168.1.1";
+    int port = 5661;
 
     RCLCPP_INFO(
         get_logger(),
@@ -76,87 +88,56 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions& options)
     // to prevent a callback from trying to use the publisher before we are
     // finished setting up.
     std::lock_guard<std::mutex> lock(ai_mutex_);
-
-    uint32_t n_in;
     try
     {
         ais_ = std::make_unique<AnalogInputs>(
-            serial_num, hub_port, is_hub_port_device,
+            serial_num, hub_port, true, ip_, port,
             std::bind(&AnalogInputsRosI::sensorChangeCallback, this,
-                      std::placeholders::_1, std::placeholders::_2));
-
-        n_in = ais_->getInputCount();
-        RCLCPP_INFO(get_logger(), "Connected to serial %d, %u inputs",
-                    ais_->getSerialNumber(), n_in);
-        val_to_pubs_.resize(n_in);
-        for (uint32_t i = 0; i < n_in; i++)
-        {
-            char str[100];
-            snprintf(str, sizeof(str), "gain%02d", i);
-            val_to_pubs_[i].gain = this->declare_parameter(str, 1.0);
-
-            snprintf(str, sizeof(str), "offset%02d", i);
-            val_to_pubs_[i].offset = this->declare_parameter(str, 0.0);
-
-            snprintf(str, sizeof(str), "analog_input%02d", i);
-            val_to_pubs_[i].pub =
-                this->create_publisher<std_msgs::msg::Float64>(str, 1);
-
-            ais_->setDataInterval(i, data_interval_ms);
-        }
+                      std::placeholders::_1));
+        //ais_->setDataInterval(data_interval_ms);
     } catch (const Phidget22Error& err)
     {
         RCLCPP_ERROR(get_logger(), "AnalogInputs: %s", err.what());
         throw;
     }
+    voltage_pub_ =
+            this->create_publisher<std_msgs::msg::Float64>("voltage", 1);
 
-    if (publish_rate_ > 0.0)
-    {
-        double pub_msec = 1000.0 / publish_rate_;
-        timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
-            std::bind(&AnalogInputsRosI::timerCallback, this));
-    } else
-    {
-        // If we are *not* publishing periodically, then we are event driven and
-        // will only publish when something changes (where "changes" is defined
-        // by the libphidget22 library).  In that case, make sure to publish
-        // once at the beginning to make sure there is *some* data.
-        for (uint32_t i = 0; i < n_in; ++i)
-        {
-            publishLatest(i);
-        }
-    }
+    got_first_data_ = false;
+    double pub_msec = 1000.0 / publish_rate_;
+
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
+        std::bind(&AnalogInputsRosI::timerCallback, this));
 }
 
-void AnalogInputsRosI::publishLatest(int index)
+void AnalogInputsRosI::publishLatest()
 {
     auto msg = std::make_unique<std_msgs::msg::Float64>();
-    msg->data = val_to_pubs_[index].last_val * val_to_pubs_[index].gain +
-                val_to_pubs_[index].offset;
-    val_to_pubs_[index].pub->publish(std::move(msg));
+    msg->data = last_sensor_reading_;
+    voltage_pub_->publish(std::move(msg));
 }
 
 void AnalogInputsRosI::timerCallback()
 {
     std::lock_guard<std::mutex> lock(ai_mutex_);
-    for (int i = 0; i < static_cast<int>(val_to_pubs_.size()); ++i)
+    if (got_first_data_)
     {
-        publishLatest(i);
+        publishLatest();
     }
 }
 
-void AnalogInputsRosI::sensorChangeCallback(int index, double sensor_value)
+void AnalogInputsRosI::sensorChangeCallback(double sensor_value)
 {
-    if (static_cast<int>(val_to_pubs_.size()) > index)
+    std::lock_guard<std::mutex> lock(ai_mutex_);
+    last_sensor_reading_ = sensor_value;
+    if (!got_first_data_)
     {
-        std::lock_guard<std::mutex> lock(ai_mutex_);
-        val_to_pubs_[index].last_val = sensor_value;
-
-        if (publish_rate_ <= 0.0)
-        {
-            publishLatest(index);
-        }
+        got_first_data_ = true;
+    }
+    if (publish_rate_ <= 0.0)
+    {
+        publishLatest();
     }
 }
 

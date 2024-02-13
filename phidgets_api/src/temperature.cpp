@@ -39,19 +39,28 @@ namespace phidgets {
 
 Temperature::Temperature(int32_t serial_number, int hub_port,
                          bool is_hub_port_device,
+                         std::string address,
+                         int port,
                          std::function<void(double)> temperature_handler)
-    : serial_number_(serial_number), temperature_handler_(temperature_handler)
+    : serial_number_(serial_number),
+    temperature_handler_(temperature_handler)
 {
+    if (is_hub_port_device){
+        std::string server = "server";
+        std::string password = "";
+        int flags = 0;
+        PhidgetNet_addServer(server.c_str(), address.c_str(), port, password.c_str(), flags);
+    }
+
     PhidgetReturnCode ret =
         PhidgetTemperatureSensor_create(&temperature_handle_);
     if (ret != EPHIDGET_OK)
     {
         throw Phidget22Error("Failed to create TemperatureSensor handle", ret);
     }
-
-    helpers::openWaitForAttachment(
-        reinterpret_cast<PhidgetHandle>(temperature_handle_), serial_number,
-        hub_port, is_hub_port_device, 0);
+    Phidget_setHubPort(reinterpret_cast<PhidgetHandle>(temperature_handle_), hub_port);
+    Phidget_setIsRemote(reinterpret_cast<PhidgetHandle>(temperature_handle_), 1);
+    Phidget_setDeviceSerialNumber(reinterpret_cast<PhidgetHandle>(temperature_handle_), serial_number);
 
     ret = PhidgetTemperatureSensor_setOnTemperatureChangeHandler(
         temperature_handle_, TemperatureChangeHandler, this);
@@ -60,18 +69,17 @@ Temperature::Temperature(int32_t serial_number, int hub_port,
         throw Phidget22Error("Failed to set change handler for Temperature",
                              ret);
     }
+    Phidget_openWaitForAttachment(reinterpret_cast<PhidgetHandle>(temperature_handle_), 20000);
 
-    if (serial_number_ == -1)
+    ret = Phidget_getDeviceSerialNumber(
+        reinterpret_cast<PhidgetHandle>(temperature_handle_),
+        &serial_number_);
+    if (ret != EPHIDGET_OK)
     {
-        ret = Phidget_getDeviceSerialNumber(
-            reinterpret_cast<PhidgetHandle>(temperature_handle_),
-            &serial_number_);
-        if (ret != EPHIDGET_OK)
-        {
-            throw Phidget22Error("Failed to get serial number for temperature",
-                                 ret);
-        }
+        throw Phidget22Error("Failed to get serial number for temperature",
+                                ret);
     }
+
 }
 
 Temperature::~Temperature()

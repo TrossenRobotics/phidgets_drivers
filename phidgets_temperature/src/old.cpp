@@ -49,52 +49,34 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions& options)
 
     int serial_num = 664919;
 
-    int hub_port = 3;
+    //int data_interval_ms = 10;
 
-    int thermocouple_type = 0;
+    publish_rate_ = 10.0;
 
-    int data_interval_ms = 500;
-
-    publish_rate_ = 1.0;
-
-    std::string ip_ = "192.168.1.1";
-    int port = 5661;
-
-    RCLCPP_INFO(get_logger(),
-                "Connecting to Phidgets Temperature serial %d, hub port %d, "
-                "thermocouple "
-                "type %d",
-                serial_num, hub_port, thermocouple_type);
-
-    // We take the mutex here and don't unlock until the end of the constructor
-    // to prevent a callback from trying to use the publisher before we are
-    // finished setting up.
     std::lock_guard<std::mutex> lock(temperature_mutex_);
-
-    try
-    {
-        temperature_ = std::make_unique<Temperature>(
-            serial_num, hub_port, true, ip_, port,
-            std::bind(&TemperatureRosI::temperatureChangeCallback, this,
-                      std::placeholders::_1));
-
-        temperature_->setDataInterval(data_interval_ms);
-
-    } catch (const Phidget22Error& err)
-    {
-        RCLCPP_ERROR(get_logger(), "Temperature: %s", err.what());
-        throw;
-    }
-
+    std::string server = "server";
+    std::string address = "192.168.1.1";
+    int port = 5661;
+    std::string password = "";
+    int flags = 0;
+    PhidgetNet_addServer(server.c_str(), address.c_str(), port, password.c_str(), flags);
+    PhidgetTemperatureSensor_create(&temperature_handle_);
+    Phidget_setIsRemote(reinterpret_cast<PhidgetHandle>(temperature_handle_), 1);
+    Phidget_setDeviceSerialNumber(reinterpret_cast<PhidgetHandle>(temperature_handle_), serial_num);
+    PhidgetTemperatureSensor_setOnTemperatureChangeHandler(
+        temperature_handle_, TemperatureChangeHandler, this);
+    Phidget_openWaitForAttachment(reinterpret_cast<PhidgetHandle>(temperature_handle_), 20000);
     temperature_pub_ =
         this->create_publisher<std_msgs::msg::Float64>("temperature", 1);
-
+    std::function<void(double)> temperature_handler = std::bind(&TemperatureRosI::temperatureChangeCallback, this,
+                      std::placeholders::_1);
     got_first_data_ = false;
 
     double pub_msec = 1000.0 / publish_rate_;
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
         std::bind(&TemperatureRosI::timerCallback, this));
+
 }
 
 void TemperatureRosI::publishLatest()
@@ -112,6 +94,20 @@ void TemperatureRosI::timerCallback()
         publishLatest();
     }
 }
+
+void TemperatureRosI::temperatureChangeHandler(double temperature) const
+{
+    temperature_handler_(temperature);
+}
+
+void Temperature::TemperatureChangeHandler(
+    PhidgetTemperatureSensorHandle /* temperature_handle */, void *ctx,
+    double temperature)
+{
+    (reinterpret_cast<Temperature *>(ctx))
+        ->temperatureChangeHandler(temperature);
+}
+
 
 void TemperatureRosI::temperatureChangeCallback(double temperature)
 {
@@ -132,3 +128,8 @@ void TemperatureRosI::temperatureChangeCallback(double temperature)
 }  // namespace phidgets
 
 RCLCPP_COMPONENTS_REGISTER_NODE(phidgets::TemperatureRosI)
+
+
+
+
+

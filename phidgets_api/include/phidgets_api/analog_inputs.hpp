@@ -32,9 +32,7 @@
 
 #include <functional>
 #include <memory>
-#include <vector>
 
-#include "phidgets_api/analog_input.hpp"
 #include "phidgets_api/phidget22.hpp"
 
 namespace phidgets {
@@ -45,22 +43,24 @@ class AnalogInputs final
     PHIDGET22_NO_COPY_NO_MOVE_NO_ASSIGN(AnalogInputs)
 
     explicit AnalogInputs(int32_t serial_number, int hub_port,
-                          bool is_hub_port_device,
-                          std::function<void(int, double)> input_handler);
+                          bool is_hub_port_device, std::string address, int port,
+                          std::function<void(double)> input_handler);
 
-    ~AnalogInputs() = default;
+    ~AnalogInputs();
 
-    int32_t getSerialNumber() const noexcept;
+    double getSensorValue() const;
 
-    uint32_t getInputCount() const noexcept;
+    void setDataInterval(uint32_t data_interval_ms) const;
 
-    double getSensorValue(int index) const;
-
-    void setDataInterval(int index, uint32_t data_interval_ms) const;
+    void voltageChangeHandler(double sensorValue) const;
 
   private:
-    uint32_t input_count_{0};
-    std::vector<std::unique_ptr<AnalogInput>> ais_;
+    int32_t serial_number_;
+    std::function<void(double)> input_handler_;
+    PhidgetVoltageInputHandle ai_handle_{nullptr};
+
+    static void VoltageChangeHandler(PhidgetVoltageInputHandle input_handle,
+                                     void *ctx, double sensorValue);
 };
 
 }  // namespace phidgets
