@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PHIDGETS_TEMPERATURE_TEMPERATURE_ROS_I_HPP
-#define PHIDGETS_TEMPERATURE_TEMPERATURE_ROS_I_HPP
+#ifndef PHIDGETS_TEMPERATURE__TEMPERATURE_ROS_I_HPP_
+#define PHIDGETS_TEMPERATURE__TEMPERATURE_ROS_I_HPP_
 
 #include <memory>
 #include <mutex>
@@ -38,29 +38,55 @@
 
 #include "phidgets_api/temperature.hpp"
 
-namespace phidgets {
-
+namespace phidgets
+{
+/**
+ * This class provides methods for retrieving and publishing temperature data.
+ */
 class TemperatureRosI final : public rclcpp::Node
 {
-  public:
-    explicit TemperatureRosI(const rclcpp::NodeOptions& options);
+public:
+  /// @brief Constructor for the TemperatureRosI class
+  explicit TemperatureRosI(const rclcpp::NodeOptions & options);
 
-  private:
-    std::unique_ptr<Temperature> temperature_;
-    std::mutex temperature_mutex_;
-    double last_temperature_reading_{0.0};
-    bool got_first_data_;
+private:
+  // temperature sensor handle
+  std::unique_ptr<Temperature> temperature_;
 
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr temperature_pub_;
-    void timerCallback();
-    rclcpp::TimerBase::SharedPtr timer_;
-    double publish_rate_;
+  // Mutex for temperature data
+  std::mutex temperature_mutex_;
 
-    void publishLatest();
+  // Store latest reading
+  double last_temperature_reading_{0.0};
 
-    void temperatureChangeCallback(double temperature);
+  // Flag to indicate start of the data streaming
+  bool got_first_data_;
+
+  // Temperature data publisher
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr temperature_pub_;
+
+  // Timer callback for desired publishing frequency
+  void timerCallback();
+
+  // Shared timer object
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  // Desired publishing frequency
+  double publish_rate_;
+  /**
+   * @brief Publish latest temperature data.
+   * @return Void.
+   */
+  void publishLatest();
+
+  /**
+   * @brief Handle temperature callback.
+   * @param temperature Raw data coming from sensor.
+   * @return Void.
+   */
+  void temperatureChangeCallback(double temperature);
 };
 
 }  // namespace phidgets
 
-#endif  // PHIDGETS_TEMPERATURE_TEMPERATURE_ROS_I_HPP
+#endif  // PHIDGETS_TEMPERATURE__TEMPERATURE_ROS_I_HPP_

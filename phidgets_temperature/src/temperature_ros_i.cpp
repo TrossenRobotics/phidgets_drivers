@@ -38,95 +38,97 @@
 
 #include "phidgets_temperature/temperature_ros_i.hpp"
 
-namespace phidgets {
-
-TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions& options)
-    : rclcpp::Node("phidgets_temperature_node", options)
+namespace phidgets
 {
-    setvbuf(stdout, nullptr, _IONBF, BUFSIZ);
 
-    RCLCPP_INFO(get_logger(), "Starting Phidgets Temperature");
+TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
+: rclcpp::Node("phidgets_temperature_node", options)
+{
+  setvbuf(stdout, nullptr, _IONBF, BUFSIZ);
 
-    int serial_num = 664919;
+  RCLCPP_INFO(get_logger(), "Starting Phidgets Temperature");
+  int serial_num =
+    this->declare_parameter("serial", 664919);      // default open any device
 
-    int hub_port = 3;
+  int port = this->declare_parameter(
+    "port", 5661);      // only used if the device is on a VINT hub_port
 
-    int thermocouple_type = 0;
+  // only used if the device is on a VINT hub_port
+  bool is_hub_port_device =
+    this->declare_parameter("is_hub_port_device", true);
 
-    int data_interval_ms = 500;
+  int data_interval_ms = this->declare_parameter("data_interval_ms", 250);
 
-    publish_rate_ = 1.0;
+  publish_rate_ = this->declare_parameter("publish_rate", 0.0);
+  if (publish_rate_ > 1000.0) {
+    throw std::runtime_error("Publish rate must be <= 1000");
+  }
+  std::string ip_ = this->declare_parameter("ip_address", "192.168.1.1");
+  int hub_port = this->declare_parameter("hub_channel", 0);
 
-    std::string ip_ = "192.168.1.1";
-    int port = 5661;
+  RCLCPP_INFO(
+    get_logger(),
+    "Connecting to Phidgets Temperature serial %d, hub port %d, "
+    "thermocouple "
+    "type %d",
+    serial_num, hub_port, thermocouple_type);
 
-    RCLCPP_INFO(get_logger(),
-                "Connecting to Phidgets Temperature serial %d, hub port %d, "
-                "thermocouple "
-                "type %d",
-                serial_num, hub_port, thermocouple_type);
+  // We take the mutex here and don't unlock until the end of the constructor
+  // to prevent a callback from trying to use the publisher before we are
+  // finished setting up.
+  std::lock_guard<std::mutex> lock(temperature_mutex_);
 
-    // We take the mutex here and don't unlock until the end of the constructor
-    // to prevent a callback from trying to use the publisher before we are
-    // finished setting up.
-    std::lock_guard<std::mutex> lock(temperature_mutex_);
+  try {
+    temperature_ = std::make_unique<Temperature>(
+      serial_num, hub_port, true, ip_, port,
+      std::bind(
+        &TemperatureRosI::temperatureChangeCallback, this,
+        std::placeholders::_1));
 
-    try
-    {
-        temperature_ = std::make_unique<Temperature>(
-            serial_num, hub_port, true, ip_, port,
-            std::bind(&TemperatureRosI::temperatureChangeCallback, this,
-                      std::placeholders::_1));
+    temperature_->setDataInterval(data_interval_ms);
+  } catch (const Phidget22Error & err) {
+    RCLCPP_ERROR(get_logger(), "Temperature: %s", err.what());
+    throw;
+  }
 
-        temperature_->setDataInterval(data_interval_ms);
+  temperature_pub_ =
+    this->create_publisher<std_msgs::msg::Float64>("temperature", 1);
 
-    } catch (const Phidget22Error& err)
-    {
-        RCLCPP_ERROR(get_logger(), "Temperature: %s", err.what());
-        throw;
-    }
+  got_first_data_ = false;
 
-    temperature_pub_ =
-        this->create_publisher<std_msgs::msg::Float64>("temperature", 1);
-
-    got_first_data_ = false;
-
-    double pub_msec = 1000.0 / publish_rate_;
-    timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
-        std::bind(&TemperatureRosI::timerCallback, this));
+  double pub_msec = 1000.0 / publish_rate_;
+  timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
+    std::bind(&TemperatureRosI::timerCallback, this));
 }
 
 void TemperatureRosI::publishLatest()
 {
-    auto msg = std::make_unique<std_msgs::msg::Float64>();
-    msg->data = last_temperature_reading_;
-    temperature_pub_->publish(std::move(msg));
+  auto msg = std::make_unique<std_msgs::msg::Float64>();
+  msg->data = last_temperature_reading_;
+  temperature_pub_->publish(std::move(msg));
 }
 
 void TemperatureRosI::timerCallback()
 {
-    std::lock_guard<std::mutex> lock(temperature_mutex_);
-    if (got_first_data_)
-    {
-        publishLatest();
-    }
+  std::lock_guard<std::mutex> lock(temperature_mutex_);
+  if (got_first_data_) {
+    publishLatest();
+  }
 }
 
 void TemperatureRosI::temperatureChangeCallback(double temperature)
 {
-    std::lock_guard<std::mutex> lock(temperature_mutex_);
-    last_temperature_reading_ = temperature;
+  std::lock_guard<std::mutex> lock(temperature_mutex_);
+  last_temperature_reading_ = temperature;
 
-    if (!got_first_data_)
-    {
-        got_first_data_ = true;
-    }
+  if (!got_first_data_) {
+    got_first_data_ = true;
+  }
 
-    if (publish_rate_ <= 0.0)
-    {
-        publishLatest();
-    }
+  if (publish_rate_ <= 0.0) {
+    publishLatest();
+  }
 }
 
 }  // namespace phidgets

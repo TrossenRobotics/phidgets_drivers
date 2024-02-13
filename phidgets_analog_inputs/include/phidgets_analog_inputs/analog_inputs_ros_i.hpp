@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PHIDGETS_ANALOG_INPUTS_ANALOG_INPUTS_ROS_I_HPP
-#define PHIDGETS_ANALOG_INPUTS_ANALOG_INPUTS_ROS_I_HPP
+#ifndef PHIDGETS_ANALOG_INPUTS__ANALOG_INPUTS_ROS_I_HPP_
+#define PHIDGETS_ANALOG_INPUTS__ANALOG_INPUTS_ROS_I_HPP_
 
 #include <memory>
 #include <mutex>
@@ -38,28 +38,56 @@
 
 #include "phidgets_api/analog_inputs.hpp"
 
-namespace phidgets {
-
+namespace phidgets
+{
+/**
+ * This class provides methods for retrieving and publishing voltage data.
+ */
 class AnalogInputsRosI final : public rclcpp::Node
 {
-  public:
-    explicit AnalogInputsRosI(const rclcpp::NodeOptions& options);
+public:
+  /// @brief Constructor for the TemperatureRosI class
+  explicit AnalogInputsRosI(const rclcpp::NodeOptions & options);
 
-  private:
-    std::unique_ptr<AnalogInputs> ais_;
-    std::mutex ai_mutex_;
-    double last_sensor_reading_{0.0};
-    bool got_first_data_;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr voltage_pub_;
-    void timerCallback();
-    rclcpp::TimerBase::SharedPtr timer_;
-    double publish_rate_;
+private:
+  // Sensor handle
+  std::unique_ptr<AnalogInputs> ais_;
 
-    void publishLatest();
+  // Mutex for analog input
+  std::mutex ai_mutex_;
 
-    void sensorChangeCallback(double sensor_value);
+  // Container to store latest sensor value
+  double last_sensor_reading_{0.0};
+
+  // A flag to indicate start of data streaming
+  bool got_first_data_;
+
+  // Publisher for voltage
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr voltage_pub_;
+
+  // Timer callback function
+  void timerCallback();
+
+  // Shared timer object
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  // rate at which sensor value is published
+  double publish_rate_;
+
+  /**
+   * @brief Publish latest sensor value.
+   * @return Void.
+   */
+  void publishLatest();
+
+  /**
+   * @brief Handle temperature callback.
+   * @param sensor_value Raw data coming from sensor.
+   * @return Void.
+   */
+  void sensorChangeCallback(double sensor_value);
 };
 
 }  // namespace phidgets
 
-#endif  // PHIDGETS_ANALOG_INPUTS_ANALOG_INPUTS_ROS_I_HPP
+#endif  // PHIDGETS_ANALOG_INPUTS__ANALOG_INPUTS_ROS_I_HPP_
