@@ -82,7 +82,7 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions & options)
     ais_ = std::make_unique<AnalogInputs>(
       serial_num, hub_port, true, ip_, port,
       std::bind(
-        &AnalogInputsRosI::sensorChangeCallback, this,
+        &AnalogInputsRosI::sensor_change_callback, this,
         std::placeholders::_1));
   } catch (const Phidget22Error & err) {
     RCLCPP_ERROR(get_logger(), "AnalogInputs: %s", err.what());
@@ -96,25 +96,25 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions & options)
 
   timer_ = this->create_wall_timer(
     std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
-    std::bind(&AnalogInputsRosI::timerCallback, this));
+    std::bind(&AnalogInputsRosI::timer_callback, this));
 }
 
-void AnalogInputsRosI::publishLatest()
+void AnalogInputsRosI::publish_latest()
 {
   auto msg = std::make_unique<std_msgs::msg::Float64>();
   msg->data = last_sensor_reading_;
   voltage_pub_->publish(std::move(msg));
 }
 
-void AnalogInputsRosI::timerCallback()
+void AnalogInputsRosI::timer_callback()
 {
   std::lock_guard<std::mutex> lock(ai_mutex_);
   if (got_first_data_) {
-    publishLatest();
+    publish_latest();
   }
 }
 
-void AnalogInputsRosI::sensorChangeCallback(double sensor_value)
+void AnalogInputsRosI::sensor_change_callback(double sensor_value)
 {
   std::lock_guard<std::mutex> lock(ai_mutex_);
   last_sensor_reading_ = sensor_value;
@@ -122,7 +122,7 @@ void AnalogInputsRosI::sensorChangeCallback(double sensor_value)
     got_first_data_ = true;
   }
   if (publish_rate_ <= 0.0) {
-    publishLatest();
+    publish_latest();
   }
 }
 

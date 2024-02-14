@@ -82,7 +82,7 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
     temperature_ = std::make_unique<Temperature>(
       serial_num, hub_port, true, ip_, port,
       std::bind(
-        &TemperatureRosI::temperatureChangeCallback, this,
+        &TemperatureRosI::sensor_change_callback, this,
         std::placeholders::_1));
 
     temperature_->setDataInterval(data_interval_ms);
@@ -99,25 +99,25 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
   double pub_msec = 1000.0 / publish_rate_;
   timer_ = this->create_wall_timer(
     std::chrono::milliseconds(static_cast<int64_t>(pub_msec)),
-    std::bind(&TemperatureRosI::timerCallback, this));
+    std::bind(&TemperatureRosI::timer_callback, this));
 }
 
-void TemperatureRosI::publishLatest()
+void TemperatureRosI::publish_latest()
 {
   auto msg = std::make_unique<std_msgs::msg::Float64>();
   msg->data = last_temperature_reading_;
   temperature_pub_->publish(std::move(msg));
 }
 
-void TemperatureRosI::timerCallback()
+void TemperatureRosI::timer_callback()
 {
   std::lock_guard<std::mutex> lock(temperature_mutex_);
   if (got_first_data_) {
-    publishLatest();
+    publish_latest();
   }
 }
 
-void TemperatureRosI::temperatureChangeCallback(double temperature)
+void TemperatureRosI::sensor_change_callback(double temperature)
 {
   std::lock_guard<std::mutex> lock(temperature_mutex_);
   last_temperature_reading_ = temperature;
@@ -127,7 +127,7 @@ void TemperatureRosI::temperatureChangeCallback(double temperature)
   }
 
   if (publish_rate_ <= 0.0) {
-    publishLatest();
+    publish_latest();
   }
 }
 

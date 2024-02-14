@@ -66,7 +66,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr voltage_pub_;
 
   // Timer callback function
-  void timerCallback();
+  void timer_callback();
 
   // Shared timer object
   rclcpp::TimerBase::SharedPtr timer_;
@@ -78,14 +78,14 @@ private:
    * @brief Publish latest sensor value.
    * @return Void.
    */
-  void publishLatest();
+  void publish_latest();
 
   /**
    * @brief Handle temperature callback.
    * @param sensor_value Raw data coming from sensor.
    * @return Void.
    */
-  void sensorChangeCallback(double sensor_value);
+  void sensor_change_callback(double sensor_value);
 };
 
 }  // namespace phidgets
