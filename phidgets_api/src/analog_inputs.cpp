@@ -61,6 +61,7 @@ AnalogInputs::AnalogInputs(int32_t serial_number, int hub_port,
             "count",
             ret);
     }
+    Phidget_setIsHubPortDevice(reinterpret_cast<PhidgetHandle>(ai_handle_), is_hub_port_device)
     Phidget_setHubPort(reinterpret_cast<PhidgetHandle>(ai_handle_), hub_port);
     Phidget_setIsRemote(reinterpret_cast<PhidgetHandle>(ai_handle_), 1);
     Phidget_setDeviceSerialNumber(reinterpret_cast<PhidgetHandle>(ai_handle_), serial_number);

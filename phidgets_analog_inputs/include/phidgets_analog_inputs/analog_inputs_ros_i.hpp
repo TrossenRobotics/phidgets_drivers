@@ -81,7 +81,7 @@ private:
   void publish_latest();
 
   /**
-   * @brief Handle temperature callback.
+   * @brief Handle sensor callback.
    * @param sensor_value Raw data coming from sensor.
    * @return Void.
    */
