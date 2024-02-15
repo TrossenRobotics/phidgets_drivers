@@ -64,7 +64,7 @@ Temperature::Temperature(int32_t serial_number,
     {
         throw Phidget22Error("Failed to create TemperatureSensor handle", ret);
     }
-    Phidget_setIsHubPortDevice(reinterpret_cast<PhidgetHandle>(ai_handle_), is_hub_port_device);
+    Phidget_setIsHubPortDevice(reinterpret_cast<PhidgetHandle>(temperature_handle_), is_hub_port_device);
     Phidget_setHubPort(reinterpret_cast<PhidgetHandle>(temperature_handle_), hub_port);
     Phidget_setIsRemote(reinterpret_cast<PhidgetHandle>(temperature_handle_), 1);
 

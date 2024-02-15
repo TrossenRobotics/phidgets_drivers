@@ -69,9 +69,8 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
   RCLCPP_INFO(
     get_logger(),
     "Connecting to Phidgets Temperature serial %d, hub port %d, "
-    "thermocouple "
-    "type %d",
-    serial_num, hub_port, thermocouple_type);
+    "thermocouple ",
+    serial_num, hub_port);
 
   // We take the mutex here and don't unlock until the end of the constructor
   // to prevent a callback from trying to use the publisher before we are
@@ -80,7 +79,7 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
 
   try {
     temperature_ = std::make_unique<Temperature>(
-      serial_num, hub_port, true, ip_, port,
+      serial_num, hub_port, is_hub_port_device, ip_, port,
       std::bind(
         &TemperatureRosI::sensor_change_callback, this,
         std::placeholders::_1));

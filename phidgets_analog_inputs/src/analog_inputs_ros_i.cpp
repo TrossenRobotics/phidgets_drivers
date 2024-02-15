@@ -60,8 +60,6 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions & options)
   bool is_hub_port_device =
     this->declare_parameter("is_hub_port_device", true);
 
-  int data_interval_ms = this->declare_parameter("data_interval_ms", 250);
-
   publish_rate_ = this->declare_parameter("publish_rate", 0.0);
   if (publish_rate_ > 1000.0) {
     throw std::runtime_error("Publish rate must be <= 1000");
@@ -80,7 +78,7 @@ AnalogInputsRosI::AnalogInputsRosI(const rclcpp::NodeOptions & options)
   std::lock_guard<std::mutex> lock(ai_mutex_);
   try {
     ais_ = std::make_unique<AnalogInputs>(
-      serial_num, hub_port, true, ip_, port,
+      serial_num, hub_port, is_hub_port_device, ip_, port,
       std::bind(
         &AnalogInputsRosI::sensor_change_callback, this,
         std::placeholders::_1));
