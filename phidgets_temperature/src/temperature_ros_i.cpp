@@ -59,7 +59,7 @@ TemperatureRosI::TemperatureRosI(const rclcpp::NodeOptions & options)
 
   int data_interval_ms = this->declare_parameter("data_interval_ms", 250);
 
-  publish_rate_ = this->declare_parameter("publish_rate", 0.0);
+  publish_rate_ = this->declare_parameter("publish_rate", 1.0);
   if (publish_rate_ > 1000.0) {
     throw std::runtime_error("Publish rate must be <= 1000");
   }
